@@ -19,3 +19,9 @@ Da man bei solchen Games auch offline spielen kann, wird der Host immer der Serv
 habe das auch schon auf android getestet ! Es funktioniert dort einwadfrei selbst der Global und Party Chat !
 Geplannt ist max 5 Player in einer Party / Gruppe !
 
+
+
+CMD Build befehl: 
+
+ g++ -o rpg.exe main.cpp -lwinmm -lgdi32 -lmsimg32 -mwindows
+
