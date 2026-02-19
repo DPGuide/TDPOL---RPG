@@ -1,0 +1,269 @@
+// <--- SECTION: START: HEADER_AND_LIBS --->
+#include <windows.h>
+#include <mmsystem.h>
+#include <string>
+#include <map>
+#include <fstream>
+#include <vector>
+
+#pragma comment(lib,"winmm.lib")
+// <--- SECTION: END: HEADER_AND_LIBS --->
+
+// <--- SECTION: START: SCHNEIDER_DEFINES --->
+#define _15   if
+#define _30   char
+#define _39   for
+#define _41   else
+#define _43   int
+#define _44   bool
+#define _50   void
+#define _64   sizeof      
+#define _96   return
+#define _114  while       
+#define _202  struct      
+#define _128  true
+#define _86   false
+#define _87   std::string
+#define EQ    ==
+#define AND   &&
+#define OR    ||
+#define SCHNEIDER_BEGIN {
+#define SCHNEIDER_END   }
+#define MASZER_CUT      ;
+#define FADEN           ,
+#define PL              +
+#define MI              -
+#define MU              *
+#define AD              +=
+#define SU              -=
+
+#define _202W HWND
+#define _317 TextOutA
+#define _333 mciSendStringA
+
+typedef BOOL(WINAPI* T_pB)(HDC,_43,_43,_43,_43,HDC,_43,_43,_43,_43,UINT) MASZER_CUT
+T_pB pB = NULL MASZER_CUT
+// <--- SECTION: END: SCHNEIDER_DEFINES --->
+
+// <--- SECTION: START: GAME_STRUCTS --->
+_202 Hero SCHNEIDER_BEGIN
+    _44 active MASZER_CUT
+    _30 name[32] MASZER_CUT
+    _43 x, y, rID, cID MASZER_CUT
+    _43 sS, sD, sI, sW, sC MASZER_CUT
+    _43 hp, hpMax MASZER_CUT
+SCHNEIDER_END MASZER_CUT
+
+_202 Enemy SCHNEIDER_BEGIN
+    _43 type, hp, hpMax, dmg MASZER_CUT
+SCHNEIDER_END MASZER_CUT
+
+_202 Sprite SCHNEIDER_BEGIN
+    HBITMAP hBmp MASZER_CUT
+    _43 w, h MASZER_CUT
+SCHNEIDER_END MASZER_CUT
+// <--- SECTION: END: GAME_STRUCTS --->
+
+// <--- SECTION: START: GLOBAL_DATA --->
+enum GameState SCHNEIDER_BEGIN S_INTRO, S_MENU, S_CHAR, S_CREATE, S_MAP, S_SETTINGS, S_CONTROLS, S_BATTLE SCHNEIDER_END MASZER_CUT
+GameState state = S_INTRO MASZER_CUT
+
+Hero heroes[10] MASZER_CUT
+Enemy curEnemy MASZER_CUT // Der aktuelle Gegner
+_43 curHeroIdx = 0, crRace = 0, crClass = 0, crStep = 0, menuIdx = 0, setIdx = 0, batIdx = 0 MASZER_CUT
+_44 setMus = _128, setSnd = _128 MASZER_CUT
+_87 battleLog = "A WILD ENEMY APPEARS!" MASZER_CUT // Kampf-Nachricht
+_87 nameInput = "HERO" MASZER_CUT
+
+std::map<_43, Sprite> sprites MASZER_CUT
+_87 RACES[5] = SCHNEIDER_BEGIN "HUMAN", "ELF", "DARK ELF", "DWARF", "ORC" SCHNEIDER_END MASZER_CUT
+_87 CLASSES[5] = SCHNEIDER_BEGIN "WARRIOR", "MAGE", "ROGUE", "CLERIC", "BARD" SCHNEIDER_END MASZER_CUT
+_87 BATTLE_CMD[4] = SCHNEIDER_BEGIN "ATTACK", "MAGIC", "HEAL", "RUN" SCHNEIDER_END MASZER_CUT
+// <--- SECTION: END: GLOBAL_DATA --->
+
+// <--- SECTION: START: FILE_IO --->
+_50 Save() SCHNEIDER_BEGIN
+    std::ofstream o("save_v1475.dat", std::ios::binary) MASZER_CUT
+    _15(o.is_open()) SCHNEIDER_BEGIN o.write((_30*)heroes, _64(heroes)) MASZER_CUT o.close() MASZER_CUT SCHNEIDER_END
+SCHNEIDER_END
+
+_50 Load() SCHNEIDER_BEGIN
+    std::ifstream i("save_v1475.dat", std::ios::binary) MASZER_CUT
+    _15(i.is_open()) SCHNEIDER_BEGIN i.read((_30*)heroes, _64(heroes)) MASZER_CUT i.close() MASZER_CUT SCHNEIDER_END
+SCHNEIDER_END
+// <--- SECTION: END: FILE_IO --->
+
+// <--- SECTION: START: GRAPHICS_ENGINE --->
+_50 LoadSprite(_43 id, _87 path) SCHNEIDER_BEGIN
+    HBITMAP h = (HBITMAP)LoadImageA(NULL, path.c_str(), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE) MASZER_CUT
+    _15(h) SCHNEIDER_BEGIN BITMAP b MASZER_CUT GetObject(h, _64(BITMAP), &b) MASZER_CUT sprites[id] = SCHNEIDER_BEGIN h, b.bmWidth, b.bmHeight SCHNEIDER_END MASZER_CUT SCHNEIDER_END
+SCHNEIDER_END
+
+_50 DrawSpriteTrans(HDC hdc, _43 id, _43 x, _43 y) SCHNEIDER_BEGIN
+    _15(sprites.count(id)) SCHNEIDER_BEGIN
+        Sprite& s = sprites[id] MASZER_CUT HDC mdc = CreateCompatibleDC(hdc) MASZER_CUT SelectObject(mdc, s.hBmp) MASZER_CUT
+        _15(pB) pB(hdc, x, y, s.w, s.h, mdc, 0, 0, s.w, s.h, RGB(0,0,0)) MASZER_CUT
+        DeleteDC(mdc) MASZER_CUT
+    SCHNEIDER_END
+SCHNEIDER_END
+
+_50 DrawBox(HDC hdc, _43 x, _43 y, _43 w, _43 h, _87 txt, COLORREF c, _44 fill) SCHNEIDER_BEGIN
+    HBRUSH b = CreateSolidBrush(fill ? RGB(100, 90, 80) : RGB(25, 25, 35)) MASZER_CUT 
+    HPEN p = CreatePen(PS_SOLID, 2, c) MASZER_CUT 
+    SelectObject(hdc, b) MASZER_CUT SelectObject(hdc, p) MASZER_CUT
+    Rectangle(hdc, x, y, x + w, y + h) MASZER_CUT
+    SetTextColor(hdc, c) MASZER_CUT SetBkMode(hdc, 1) MASZER_CUT
+    _317(hdc, x + 10, y + 12, txt.c_str(), (_43)txt.length()) MASZER_CUT
+    DeleteObject(b) MASZER_CUT DeleteObject(p) MASZER_CUT
+SCHNEIDER_END
+// <--- SECTION: END: GRAPHICS_ENGINE --->
+
+// <--- SECTION: START: GAME_LOGIC --->
+_50 initGame(_202W h) SCHNEIDER_BEGIN
+    HMODULE hM = LoadLibraryA("msimg32.dll") MASZER_CUT _15(hM) pB = (T_pB)GetProcAddress(hM, "TransparentBlt") MASZER_CUT
+    _333("close all", NULL, 0, 0) MASZER_CUT
+    _333("open \"intro_01.wmv\" type MPEGVideo alias vid1 style popup", NULL, 0, 0) MASZER_CUT
+    _333("play vid1 notify", NULL, 0, (HWND)h) MASZER_CUT
+    PlaySoundA("intro_music.wav", NULL, SND_ASYNC | SND_LOOP) MASZER_CUT
+    _333("open \"intro_sound.wav\" type waveaudio alias snd1", NULL, 0, 0) MASZER_CUT
+    Load() MASZER_CUT
+    LoadSprite(1, "pl_human.bmp") MASZER_CUT LoadSprite(100, "map_1.bmp") MASZER_CUT LoadSprite(101, "splash_title.bmp") MASZER_CUT
+    LoadSprite(20, "camp_human.bmp") MASZER_CUT LoadSprite(21, "camp_elf.bmp") MASZER_CUT 
+    LoadSprite(22, "camp_darkelf.bmp") MASZER_CUT LoadSprite(23, "camp_dwarf.bmp") MASZER_CUT LoadSprite(24, "camp_orc.bmp") MASZER_CUT
+    SetTimer(h, 1, 16, NULL) MASZER_CUT
+SCHNEIDER_END
+
+_50 StartBattle() SCHNEIDER_BEGIN
+    state = S_BATTLE MASZER_CUT
+    curEnemy.type = 24 MASZER_CUT // ORC
+    curEnemy.hpMax = 50 MASZER_CUT curEnemy.hp = 50 MASZER_CUT curEnemy.dmg = 5 MASZER_CUT
+    battleLog = "A WILD ORC APPEARS!" MASZER_CUT
+SCHNEIDER_END
+
+_50 HandleKeys(_202W h, WPARAM w) SCHNEIDER_BEGIN
+    _15(w EQ VK_ESCAPE) SCHNEIDER_BEGIN 
+        _15(state EQ S_CONTROLS OR state EQ S_BATTLE) state = S_SETTINGS MASZER_CUT
+        _41 _15(state EQ S_SETTINGS) state = S_MENU MASZER_CUT 
+        _41 _15(state > S_MENU) state = S_MENU MASZER_CUT 
+        _41 SCHNEIDER_BEGIN _333("close all", 0, 0, 0) MASZER_CUT PostQuitMessage(0) MASZER_CUT SCHNEIDER_END 
+    SCHNEIDER_END
+    _15(state EQ S_INTRO AND (w EQ VK_SPACE OR w EQ VK_RETURN)) SCHNEIDER_BEGIN _333("close vid1", 0, 0, 0) MASZER_CUT ShowWindow(h, SW_MAXIMIZE) MASZER_CUT state = S_MENU MASZER_CUT SCHNEIDER_END
+    _41 _15(state EQ S_MENU) SCHNEIDER_BEGIN 
+        _15(w EQ VK_UP) menuIdx = (menuIdx + 3) % 4 MASZER_CUT _15(w EQ VK_DOWN) menuIdx = (menuIdx + 1) % 4 MASZER_CUT 
+        _15(w EQ VK_RETURN) SCHNEIDER_BEGIN _15(menuIdx < 2) state = S_CHAR MASZER_CUT _41 _15(menuIdx EQ 2) state = S_SETTINGS MASZER_CUT _41 PostQuitMessage(0) MASZER_CUT SCHNEIDER_END 
+    SCHNEIDER_END
+    _41 _15(state EQ S_SETTINGS) SCHNEIDER_BEGIN
+        _15(w EQ VK_UP) setIdx = (setIdx + 3) % 4 MASZER_CUT _15(w EQ VK_DOWN) setIdx = (setIdx + 1) % 4 MASZER_CUT
+        _15(w EQ VK_RETURN) SCHNEIDER_BEGIN
+            _15(setIdx EQ 0) SCHNEIDER_BEGIN setMus = !setMus MASZER_CUT _15(setMus) PlaySoundA("intro_music.wav", NULL, SND_ASYNC | SND_LOOP) MASZER_CUT _41 PlaySoundA(NULL, 0, 0) MASZER_CUT SCHNEIDER_END
+            _15(setIdx EQ 1) setSnd = !setSnd MASZER_CUT
+            _15(setIdx EQ 2) state = S_CONTROLS MASZER_CUT _15(setIdx EQ 3) state = S_MENU MASZER_CUT
+        SCHNEIDER_END
+    SCHNEIDER_END
+    _41 _15(state EQ S_CHAR) SCHNEIDER_BEGIN 
+        _15(w EQ VK_UP) curHeroIdx = (curHeroIdx + 9) % 10 MASZER_CUT _15(w EQ VK_DOWN) curHeroIdx = (curHeroIdx + 1) % 10 MASZER_CUT 
+        _15(w EQ VK_RETURN) SCHNEIDER_BEGIN _15(heroes[curHeroIdx].active) state = S_MAP MASZER_CUT _41 SCHNEIDER_BEGIN state = S_CREATE MASZER_CUT crStep = 0 MASZER_CUT nameInput = "" MASZER_CUT SCHNEIDER_END SCHNEIDER_END 
+    SCHNEIDER_END
+    _41 _15(state EQ S_CREATE) SCHNEIDER_BEGIN 
+        _15(crStep EQ 0) SCHNEIDER_BEGIN _15(w EQ VK_UP) crRace = (crRace + 4) % 5 MASZER_CUT _15(w EQ VK_DOWN) crRace = (crRace + 1) % 5 MASZER_CUT _15(w EQ VK_RETURN) crStep = 1 MASZER_CUT SCHNEIDER_END
+        _41 _15(crStep EQ 1) SCHNEIDER_BEGIN _15(w EQ VK_UP) crClass = (crClass + 4) % 5 MASZER_CUT _15(w EQ VK_DOWN) crClass = (crClass + 1) % 5 MASZER_CUT _15(w EQ VK_RETURN) crStep = 2 MASZER_CUT _15(w EQ VK_BACK) crStep = 0 MASZER_CUT SCHNEIDER_END
+        _41 _15(crStep EQ 2) SCHNEIDER_BEGIN 
+            _15(w EQ VK_BACK AND nameInput.length() > 0) nameInput.pop_back() MASZER_CUT
+            _41 _15(w >= 32 AND w <= 126 AND nameInput.length() < 15) nameInput += (_30)w MASZER_CUT
+            _15(w EQ VK_RETURN AND nameInput.length() > 0) SCHNEIDER_BEGIN
+                Hero& he = heroes[curHeroIdx] MASZER_CUT he.active = _128 MASZER_CUT he.x = 7 MASZER_CUT he.y = 7 MASZER_CUT 
+                he.rID = crRace MASZER_CUT he.cID = crClass MASZER_CUT strcpy(he.name, nameInput.c_str()) MASZER_CUT
+                he.sS = 10+crRace+(crClass EQ 0?5:0) MASZER_CUT he.sD = 10+(crClass EQ 2?5:0) MASZER_CUT 
+                he.sI = 10+(crClass EQ 1?5:0) MASZER_CUT he.sW = 10+(crClass EQ 3?5:0) MASZER_CUT he.sC = 10+(crRace EQ 4?3:0) MASZER_CUT
+                he.hp = he.sC * 10 MASZER_CUT he.hpMax = he.hp MASZER_CUT
+                Save() MASZER_CUT state = S_MAP MASZER_CUT
+            SCHNEIDER_END
+        SCHNEIDER_END
+    SCHNEIDER_END
+    _41 _15(state EQ S_BATTLE) SCHNEIDER_BEGIN
+        _15(w EQ VK_LEFT) batIdx = (batIdx + 3) % 4 MASZER_CUT _15(w EQ VK_RIGHT) batIdx = (batIdx + 1) % 4 MASZER_CUT
+        _15(w EQ VK_RETURN) SCHNEIDER_BEGIN
+            Hero& h = heroes[curHeroIdx] MASZER_CUT
+            _15(batIdx EQ 0) SCHNEIDER_BEGIN // ATTACK
+                _43 dmg = (h.sS * 3) / 2 MASZER_CUT curEnemy.hp SU dmg MASZER_CUT battleLog = "HIT FOR " + std::to_string(dmg) + " DMG!" MASZER_CUT
+                _15(curEnemy.hp <= 0) SCHNEIDER_BEGIN battleLog = "VICTORY!" MASZER_CUT state = S_MAP MASZER_CUT SCHNEIDER_END
+            SCHNEIDER_END
+            _15(batIdx EQ 2) SCHNEIDER_BEGIN // HEAL
+                h.hp AD h.sW * 2 MASZER_CUT _15(h.hp > h.hpMax) h.hp = h.hpMax MASZER_CUT battleLog = "HEALED!" MASZER_CUT
+            SCHNEIDER_END
+            _15(batIdx EQ 3) SCHNEIDER_BEGIN // RUN
+                _15(h.sD > 10) SCHNEIDER_BEGIN battleLog = "ESCAPED!" MASZER_CUT state = S_MAP MASZER_CUT SCHNEIDER_END
+                _41 battleLog = "FAILED TO RUN!" MASZER_CUT
+            SCHNEIDER_END
+        SCHNEIDER_END
+    SCHNEIDER_END
+    _41 _15(state EQ S_MAP) SCHNEIDER_BEGIN 
+        Hero& p = heroes[curHeroIdx] MASZER_CUT 
+        _15(w EQ VK_LEFT) p.x SU 1 MASZER_CUT _15(w EQ VK_RIGHT) p.x AD 1 MASZER_CUT _15(w EQ VK_UP) p.y SU 1 MASZER_CUT _15(w EQ VK_DOWN) p.y AD 1 MASZER_CUT 
+        // BATTLE TRIGGER (TEST KEY 'B')
+        _15(w EQ 'B') StartBattle() MASZER_CUT
+    SCHNEIDER_END
+SCHNEIDER_END
+// <--- SECTION: END: GAME_LOGIC --->
+
+// <--- SECTION: START: WINDOW_PROC --->
+LRESULT CALLBACK GameProc(_202W h, UINT m, WPARAM w, LPARAM l) SCHNEIDER_BEGIN
+    _15(m EQ WM_DESTROY) SCHNEIDER_BEGIN _333("close all", 0, 0, 0) MASZER_CUT PostQuitMessage(0) MASZER_CUT _96 0 MASZER_CUT SCHNEIDER_END
+    _15(m EQ WM_KEYDOWN) HandleKeys(h, w) MASZER_CUT
+    _15(m EQ WM_TIMER) InvalidateRect(h, NULL, _86) MASZER_CUT
+    _15(m EQ MM_MCINOTIFY AND state EQ S_INTRO AND w EQ MCI_NOTIFY_SUCCESSFUL) SCHNEIDER_BEGIN _333("close vid1", 0, 0, 0) MASZER_CUT ShowWindow(h, SW_MAXIMIZE) MASZER_CUT state = S_MENU MASZER_CUT SCHNEIDER_END
+    _15(m EQ WM_PAINT) SCHNEIDER_BEGIN
+        PAINTSTRUCT ps MASZER_CUT HDC hdc = BeginPaint(h, &ps) MASZER_CUT _15(state EQ S_INTRO) SCHNEIDER_BEGIN EndPaint(h, &ps) MASZER_CUT _96 0 MASZER_CUT SCHNEIDER_END
+        RECT r MASZER_CUT GetClientRect(h, &r) MASZER_CUT _15(r.right < 10) SCHNEIDER_BEGIN EndPaint(h, &ps) MASZER_CUT _96 0 MASZER_CUT SCHNEIDER_END
+        HDC mdc = CreateCompatibleDC(hdc) MASZER_CUT HBITMAP mb = CreateCompatibleBitmap(hdc, r.right, r.bottom) MASZER_CUT SelectObject(mdc, mb) MASZER_CUT
+        HBRUSH bg = CreateSolidBrush(RGB(10, 15, 30)) MASZER_CUT FillRect(mdc, &r, bg) MASZER_CUT DeleteObject(bg) MASZER_CUT
+        HFONT f = CreateFontA(24,0,0,0,700,0,0,0,0,0,0,0,0,"Arial") MASZER_CUT SelectObject(mdc, f) MASZER_CUT SetTextColor(mdc, RGB(255, 215, 0)) MASZER_CUT SetBkMode(mdc, 1) MASZER_CUT
+        
+        _15(state EQ S_MENU) SCHNEIDER_BEGIN
+            _15(sprites.count(101)) SCHNEIDER_BEGIN HDC sdc = CreateCompatibleDC(mdc) MASZER_CUT SelectObject(sdc, sprites[101].hBmp) MASZER_CUT StretchBlt(mdc,0,0,r.right,r.bottom,sdc,0,0,sprites[101].w,sprites[101].h,SRCCOPY) MASZER_CUT DeleteDC(sdc) MASZER_CUT SCHNEIDER_END
+            _87 b[4] = {"PLAY", "NEW", "SETTINGS", "EXIT"} MASZER_CUT _39(_43 i=0; i<4; i++) DrawBox(mdc, r.right/2-100, r.bottom/2-100+(i*65), 200, 50, b[i], RGB(255,215,0), menuIdx == i) MASZER_CUT
+        SCHNEIDER_END
+        _41 _15(state EQ S_SETTINGS) SCHNEIDER_BEGIN
+            _87 s[4] = {"MUSIC: " + _87(setMus?"ON":"OFF"), "SOUND: " + _87(setSnd?"ON":"OFF"), "CONTROLS", "BACK"} MASZER_CUT
+            _39(_43 i=0; i<4; i++) DrawBox(mdc, 100, 150+(i*60), 300, 50, s[i], RGB(255,215,0), setIdx EQ i) MASZER_CUT
+        SCHNEIDER_END
+        _41 _15(state EQ S_CONTROLS) SCHNEIDER_BEGIN _317(mdc, 100, 100, "ARROWS = MOVE", 13) MASZER_CUT _317(mdc, 100, 150, "ENTER = SELECT", 14) MASZER_CUT _317(mdc, 100, 200, "ESC = BACK", 10) MASZER_CUT SCHNEIDER_END
+        _41 _15(state EQ S_CHAR) SCHNEIDER_BEGIN
+             _317(mdc, 50, 50, "SELECT HERO", 11) MASZER_CUT _39(_43 i=0; i<10; i++) DrawBox(mdc, 50, 100+(i*55), 350, 45, heroes[i].active ? heroes[i].name : "[ EMPTY SLOT ]", RGB(255,215,0), curHeroIdx EQ i) MASZER_CUT
+        SCHNEIDER_END
+        _41 _15(state EQ S_CREATE) SCHNEIDER_BEGIN
+            _39(_43 i=0; i<5; i++) DrawBox(mdc, 50, 100+(i*55), 180, 45, RACES[i], RGB(255,215,0), (crRace EQ i AND crStep EQ 0) OR (crStep > 0 AND crRace EQ i)) MASZER_CUT
+            _39(_43 i=0; i<5; i++) DrawBox(mdc, 240, 100+(i*55), 180, 45, CLASSES[i], RGB(255,215,0), (crClass EQ i AND crStep EQ 1) OR (crStep > 1 AND crClass EQ i)) MASZER_CUT
+            _15(sprites.count(20+crRace)) SCHNEIDER_BEGIN Sprite& s = sprites[20+crRace] MASZER_CUT DrawSpriteTrans(mdc, 20+crRace, (r.right-s.w)/2, (r.bottom-s.h)/2) MASZER_CUT SCHNEIDER_END
+            _43 sS = 10+crRace+(crClass EQ 0?5:0) MASZER_CUT _87 sT = "STR: " + std::to_string(sS) MASZER_CUT _317(mdc, r.right-250, 150, sT.c_str(), (_43)sT.length()) MASZER_CUT
+            _43 sD = 10+(crClass EQ 2?5:0) MASZER_CUT _87 sD_t = "DEX: " + std::to_string(sD) MASZER_CUT _317(mdc, r.right-250, 200, sD_t.c_str(), (_43)sD_t.length()) MASZER_CUT
+            _43 sI = 10+(crClass EQ 1?5:0) MASZER_CUT _87 sI_t = "INT: " + std::to_string(sI) MASZER_CUT _317(mdc, r.right-250, 250, sI_t.c_str(), (_43)sI_t.length()) MASZER_CUT
+            _43 sW = 10+(crClass EQ 3?5:0) MASZER_CUT _87 sW_t = "WIS: " + std::to_string(sW) MASZER_CUT _317(mdc, r.right-250, 300, sW_t.c_str(), (_43)sW_t.length()) MASZER_CUT
+            _43 sC = 10+(crRace EQ 4?3:0) MASZER_CUT _87 sC_t = "CON: " + std::to_string(sC) MASZER_CUT _317(mdc, r.right-250, 350, sC_t.c_str(), (_43)sC_t.length()) MASZER_CUT
+            DrawBox(mdc, r.right/2-150, 40, 300, 50, "NAME: " + nameInput + (crStep EQ 2 ? "_":""), RGB(255,215,0), crStep EQ 2) MASZER_CUT
+        SCHNEIDER_END
+        _41 _15(state EQ S_BATTLE) SCHNEIDER_BEGIN
+            _317(mdc, r.right/2 - 100, 50, battleLog.c_str(), (_43)battleLog.length()) MASZER_CUT
+            _39(_43 i=0; i<4; i++) DrawBox(mdc, r.right/2 - 320 + (i*160), r.bottom - 100, 150, 50, BATTLE_CMD[i], RGB(255,215,0), batIdx EQ i) MASZER_CUT
+            DrawSpriteTrans(mdc, curEnemy.type, (r.right-100)/2, r.bottom/2 - 100) MASZER_CUT
+            _87 eHP = "ENEMY HP: " + std::to_string(curEnemy.hp) MASZER_CUT _317(mdc, r.right/2 - 50, r.bottom/2 + 50, eHP.c_str(), (_43)eHP.length()) MASZER_CUT
+            _87 hHP = "HERO HP: " + std::to_string(heroes[curHeroIdx].hp) MASZER_CUT _317(mdc, 50, r.bottom - 50, hHP.c_str(), (_43)hHP.length()) MASZER_CUT
+        SCHNEIDER_END
+        _41 _15(state EQ S_MAP) SCHNEIDER_BEGIN
+            _15(sprites.count(100)) SCHNEIDER_BEGIN HDC sdc = CreateCompatibleDC(mdc) MASZER_CUT SelectObject(sdc, sprites[100].hBmp) MASZER_CUT StretchBlt(mdc,0,0,r.right,r.bottom,sdc,0,0,sprites[100].w,sprites[100].h,SRCCOPY) MASZER_CUT DeleteDC(sdc) MASZER_CUT SCHNEIDER_END
+            _43 tSz = r.bottom/15 MASZER_CUT DrawSpriteTrans(mdc, 1, (r.right-tSz*15)/2 + heroes[curHeroIdx].x*tSz, heroes[curHeroIdx].y*tSz) MASZER_CUT
+        SCHNEIDER_END
+        BitBlt(hdc, 0, 0, r.right, r.bottom, mdc, 0, 0, SRCCOPY) MASZER_CUT
+        DeleteObject(mb) MASZER_CUT DeleteDC(mdc) MASZER_CUT DeleteObject(f) MASZER_CUT EndPaint(h, &ps) MASZER_CUT
+    SCHNEIDER_END
+    _96 DefWindowProcA(h, m, w, l) MASZER_CUT
+SCHNEIDER_END
+// <--- SECTION: END: WINDOW_PROC --->
+
+// <--- SECTION: START: WINMAIN --->
+_43 WINAPI WinMain(HINSTANCE i, HINSTANCE p, LPSTR c, _43 s) SCHNEIDER_BEGIN
+    WNDCLASSA wc = {0} MASZER_CUT wc.lpfnWndProc = GameProc MASZER_CUT wc.hInstance = i MASZER_CUT wc.lpszClassName = "RPG" MASZER_CUT RegisterClassA(&wc) MASZER_CUT
+    _202W h = CreateWindowA("RPG", "Dark Path to Light", WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_MAXIMIZE, 0, 0, 1280, 720, NULL, NULL, i, NULL) MASZER_CUT
+    initGame(h) MASZER_CUT MSG msg MASZER_CUT _114(GetMessageA(&msg, NULL, 0, 0)) SCHNEIDER_BEGIN TranslateMessage(&msg) MASZER_CUT DispatchMessageA(&msg) MASZER_CUT SCHNEIDER_END _96 0 MASZER_CUT
+SCHNEIDER_END
+// <--- SECTION: END: WINMAIN --->
