@@ -1,4 +1,4 @@
-﻿# TDPOL---RPG
+﻿# TDPOL --- RPG -- The Dark Path of Light ---
 its just a FANART
 
 Based on The Dark Eye and Hero Quest,
@@ -18,3 +18,4 @@ Da man bei solchen Games auch offline spielen kann, wird der Host immer der Serv
 " Klingel Putzen " werde ich llediglich Firebase ein binden . man klingelt nur "hallo stehe auf X,Y " "hallo hab das  und das gewürfelt !
 habe das auch schon auf android getestet ! Es funktioniert dort einwadfrei selbst der Global und Party Chat !
 Geplannt ist max 5 Player in einer Party / Gruppe !
+
